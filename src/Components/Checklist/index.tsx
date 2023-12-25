@@ -4,6 +4,8 @@ import { colors, inputType } from "../../constants/AppConstants";
 import CheckListItem from "../CheckListItem";
 import useAuthStore from "../../store/Auth";
 import useUserChecklistStore from "../../store/Checklist";
+import { mydatabase } from "../../database";
+import { v4 as uuidv4 } from 'uuid';
 
 function Checklist() {
     const [newChecklistTitle, setNewChecklistTitle] = useState<string>("");
@@ -11,6 +13,7 @@ function Checklist() {
     const [selectedChecklistIndex, setSelectedChecklistIndex] = useState<number>(-1);
     const [newTaskText, setNewTaskText] = useState<string>("");
 
+    const user = useAuthStore(store => store.user)
     const setUserData = useAuthStore(store => store.setUserData)
     const setIsLoggedIn = useAuthStore(store => store.setIsLoggedIn)
     const setUserChecklist = useUserChecklistStore(store => store.setUserChecklist)
@@ -26,13 +29,23 @@ function Checklist() {
         return inputType[random];
     }, []);
 
-    const handleNewChecklist = useCallback(() => {
+    const handleNewChecklist = useCallback(async () => {
+        const checklistId = uuidv4();
+
         if (newChecklistTitle.trim() !== "") {
-            const newChecklist = { title: newChecklistTitle, tasks: [] };
-            setUserChecklist([...userChecklist, newChecklist])
+            const checklistItem = await mydatabase.checklists.insert({
+                checklistId,
+                userId: user.userId,
+                title: newChecklistTitle,
+                tasks: [],
+            });
+
+            const newChecklistItem = { checklistId: checklistItem._data.checklistId, userId: user.userId, title: checklistItem._data.title, tasks: [] }
+
+            setUserChecklist([...userChecklist, newChecklistItem])
             setNewChecklistTitle("");
         }
-    }, [userChecklist, newChecklistTitle, setUserChecklist]);
+    }, [userChecklist, newChecklistTitle, setUserChecklist, user.userId]);
 
     const handleOpenTaskModal = useCallback((index: number) => {
         setSelectedChecklistIndex(index);
@@ -44,32 +57,68 @@ function Checklist() {
         setShowTaskModal(false);
     }, []);
 
-    const handleCreateTask = useCallback(() => {
-        if (newTaskText.trim() !== "") {
-            const updatedChecklists = [...userChecklist];
+    const handleCreateTask = useCallback(async () => {
+        if (newTaskText.trim() !== "" && selectedChecklistIndex !== -1) {
+            const checklistId = userChecklist[selectedChecklistIndex].checklistId;
+
             const task = {
                 text: newTaskText,
                 indicatorColor: getRandomColor(),
                 inputType: getRandomInputType(),
             };
+
+            const checklistItem = await mydatabase.checklists.findOne(checklistId).exec();
+            checklistItem.tasks.push(task);
+
+            await checklistItem.update();
+
+            const updatedChecklists = [...userChecklist];
             updatedChecklists[selectedChecklistIndex].tasks.push(task);
-            setUserChecklist(updatedChecklists)
+            setUserChecklist(updatedChecklists);
+
             setNewTaskText("");
             setShowTaskModal(false);
         }
-    }, [userChecklist, newTaskText, selectedChecklistIndex, setUserChecklist, getRandomColor, getRandomInputType]);
+    }, [newTaskText, selectedChecklistIndex, setUserChecklist, userChecklist, getRandomColor, getRandomInputType]);
 
-    const handleDeleteChecklist = useCallback((index: number) => {
-        const updatedChecklists = [...userChecklist];
-        updatedChecklists.splice(index, 1);
-        setUserChecklist(updatedChecklists)
-    }, [setUserChecklist, userChecklist]);
+    const handleDeleteChecklist = useCallback(async (index: number) => {
+        if (index >= 0 && index < userChecklist.length) {
+            const checklistId = userChecklist[index].checklistId;
 
-    const handleDeleteTask = useCallback((checklistIndex: number, taskIndex: number) => {
-        const updatedChecklists = [...userChecklist];
-        updatedChecklists[checklistIndex].tasks.splice(taskIndex, 1);
-        setUserChecklist(updatedChecklists)
-    }, [setUserChecklist, userChecklist]);
+            const checklistItem = await mydatabase.checklists.findOne(checklistId).exec();
+            if (checklistItem) {
+                await checklistItem.remove();
+            }
+
+            const updatedChecklists = [...userChecklist];
+            updatedChecklists.splice(index, 1);
+            setUserChecklist(updatedChecklists);
+        }
+    }, [userChecklist, setUserChecklist]);
+
+
+    const handleDeleteTask = useCallback(async (checklistIndex: number, taskIndex: number) => {
+        if (
+            checklistIndex >= 0 &&
+            checklistIndex < userChecklist.length &&
+            taskIndex >= 0 &&
+            taskIndex < userChecklist[checklistIndex].tasks.length
+        ) {
+            const checklistId = userChecklist[checklistIndex].checklistId;
+            const taskId = userChecklist[checklistIndex].tasks[taskIndex].id;
+
+            const checklistItem = await mydatabase.checklists.findOne(checklistId).exec();
+            if (checklistItem) {
+                const updatedTasks = checklistItem.tasks.filter((task: any) => task._id !== taskId);
+                checklistItem.tasks = updatedTasks;
+                await checklistItem.update();
+            }
+
+            const updatedChecklists = [...userChecklist];
+            updatedChecklists[checklistIndex].tasks.splice(taskIndex, 1);
+            setUserChecklist(updatedChecklists);
+        }
+    }, [userChecklist, setUserChecklist]);
 
     const handleCreateChecklistKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter") {
@@ -84,7 +133,7 @@ function Checklist() {
     }, [handleCreateTask])
 
     const handleLogout = useCallback(() => {
-        setUserData({})
+        setUserData({ userId: '', email: '' })
         setIsLoggedIn(false)
     }, [setIsLoggedIn, setUserData])
 

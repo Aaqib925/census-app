@@ -10,13 +10,14 @@ export const mydatabase = await createRxDatabase({
   storage: getRxStorageDexie(),
 });
 
+// Define the user schema
 const userSchema = {
   title: "user schema",
   version: 0,
-  primaryKey: "id",
+  primaryKey: "userId",
   type: "object",
   properties: {
-    id: {
+    userId: {
       type: "string",
       maxLength: 255,
     },
@@ -24,10 +25,66 @@ const userSchema = {
       type: "string",
     },
   },
+  required: ["userId", "email"],
+};
+
+// Define the task schema
+const taskSchema = {
+  title: "task schema",
+  version: 0,
+  type: "object",
+  primaryKey: "id",
+  properties: {
+    id: {
+      type: "string",
+      maxLength: 255,
+    },
+    text: {
+      type: "string",
+    },
+    indicatorColor: {
+      type: "string",
+    },
+    inputType: {
+      type: "string",
+    },
+  },
+  required: ["id", "text", "indicatorColor", "inputType"],
+};
+
+// Define the checklist item schema
+const checklistItemSchema = {
+  title: "checklist item schema",
+  version: 0,
+  type: "object",
+  primaryKey: "checklistId",
+  properties: {
+    checklistId: {
+      type: "string",
+      maxLength: 255,
+    },
+    userId: {
+      type: "string",
+    },
+    title: {
+      type: "string",
+    },
+    tasks: {
+      type: "array",
+      items: taskSchema,
+    },
+  },
+  required: ["checklistId", "userId", "title", "tasks"],
 };
 
 await mydatabase.addCollections({
   user: {
     schema: userSchema,
+  },
+  checklists: {
+    schema: checklistItemSchema,
+  },
+  tasks: {
+    schema: taskSchema,
   },
 });

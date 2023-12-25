@@ -15,23 +15,30 @@ const Login = () => {
 
     const handleLogin = useCallback(async () => {
         try {
-            const isUserExists = await mydatabase.user.findOne({
+            const user = await mydatabase.user.findOne({
                 selector: {
-                    email
-                }
-            }).exec().then((data: any) => data !== null);
+                    email,
+                },
+            }).exec();
 
-            if (isUserExists) {
-                setUserData({ email })
+            if (user) {
+                const userData = {
+                    userId: user.userId,
+                    email: user.email,
+                };
+
+                setUserData(userData);
                 setIsLoggedIn(true);
             } else {
-                setError('User does not exist.')
+                setError('User does not exist.');
             }
-            setEmail('')
+
+            setEmail('');
         } catch (error) {
             console.error('Error fetching user:', error);
         }
     }, [email, setIsLoggedIn, setUserData]);
+
 
     const handleLoginKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter") {

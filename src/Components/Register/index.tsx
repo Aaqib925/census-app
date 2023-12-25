@@ -23,12 +23,14 @@ const Register = () => {
             }).exec().then((data: any) => data !== null);
 
             if (!isUserExists) {
+                const userId = uuidv4();
                 await mydatabase.user.insert({
-                    id: uuidv4(),
+                    userId,
                     email
                 });
+
                 setIsLoggedIn(true);
-                setUserData({ email })
+                setUserData({ userId, email })
             } else {
                 setError('User already exists.')
             }
