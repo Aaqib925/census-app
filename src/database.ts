@@ -2,15 +2,17 @@ import { addRxPlugin } from "rxdb";
 import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
 import { createRxDatabase } from "rxdb";
 import { getRxStorageDexie } from "rxdb/plugins/storage-dexie";
+import { RxDBUpdatePlugin } from "rxdb/plugins/update";
 
 addRxPlugin(RxDBDevModePlugin);
+addRxPlugin(RxDBUpdatePlugin);
 
 export const mydatabase = await createRxDatabase({
   name: "mydatabase",
   storage: getRxStorageDexie(),
 });
 
-// Define the user schema
+// user schema
 const userSchema = {
   title: "user schema",
   version: 0,
@@ -28,7 +30,7 @@ const userSchema = {
   required: ["userId", "email"],
 };
 
-// Define the task schema
+// task schema
 const taskSchema = {
   title: "task schema",
   version: 0,
@@ -52,7 +54,7 @@ const taskSchema = {
   required: ["id", "text", "indicatorColor", "inputType"],
 };
 
-// Define the checklist item schema
+// checklist item schema
 const checklistItemSchema = {
   title: "checklist item schema",
   version: 0,

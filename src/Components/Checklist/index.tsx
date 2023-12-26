@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { HiOutlineTrash, HiOutlineChevronDown, HiPlus, HiPlusCircle, HiMinusCircle } from "react-icons/hi";
 import { colors, inputType } from "../../constants/AppConstants";
 import CheckListItem from "../CheckListItem";
@@ -18,6 +18,23 @@ function Checklist() {
     const setIsLoggedIn = useAuthStore(store => store.setIsLoggedIn)
     const setUserChecklist = useUserChecklistStore(store => store.setUserChecklist)
     const userChecklist = useUserChecklistStore(store => store.userChecklist)
+
+    const getAllChecklist = useCallback(async (db: any) => {
+        try {
+            const userChecklist = await db.checklists.find({
+                selector: {
+                    userId: user.userId
+                }
+            }).exec().then((data: any) => data.map((each: any) => each._data));
+            setUserChecklist(userChecklist)
+        } catch (error) {
+            console.error('Error fetching user checklists:', error);
+        }
+    }, [setUserChecklist, user.userId])
+
+    useEffect(() => {
+        getAllChecklist(mydatabase);
+    }, [getAllChecklist])
 
     const getRandomColor = useCallback(() => {
         const random = Math.floor(Math.random() * colors.length);
@@ -40,7 +57,12 @@ function Checklist() {
                 tasks: [],
             });
 
-            const newChecklistItem = { checklistId: checklistItem._data.checklistId, userId: user.userId, title: checklistItem._data.title, tasks: [] }
+            const newChecklistItem = {
+                checklistId: checklistItem._data.checklistId,
+                userId: user.userId,
+                title: checklistItem._data.title,
+                tasks: []
+            }
 
             setUserChecklist([...userChecklist, newChecklistItem])
             setNewChecklistTitle("");
@@ -58,28 +80,36 @@ function Checklist() {
     }, []);
 
     const handleCreateTask = useCallback(async () => {
+        const id = uuidv4();
+
         if (newTaskText.trim() !== "" && selectedChecklistIndex !== -1) {
             const checklistId = userChecklist[selectedChecklistIndex].checklistId;
 
             const task = {
+                id,
                 text: newTaskText,
                 indicatorColor: getRandomColor(),
                 inputType: getRandomInputType(),
             };
 
             const checklistItem = await mydatabase.checklists.findOne(checklistId).exec();
-            checklistItem.tasks.push(task);
+            if (checklistItem) {
+                const updatedTasks = [...checklistItem.get('tasks'), task];
 
-            await checklistItem.update();
+                await checklistItem.update({
+                    $set: { tasks: updatedTasks },
+                });
 
-            const updatedChecklists = [...userChecklist];
-            updatedChecklists[selectedChecklistIndex].tasks.push(task);
-            setUserChecklist(updatedChecklists);
+                const updatedChecklists = [...userChecklist];
+                updatedChecklists[selectedChecklistIndex].tasks = updatedTasks;
+                setUserChecklist(updatedChecklists);
+            }
 
             setNewTaskText("");
             setShowTaskModal(false);
         }
     }, [newTaskText, selectedChecklistIndex, setUserChecklist, userChecklist, getRandomColor, getRandomInputType]);
+
 
     const handleDeleteChecklist = useCallback(async (index: number) => {
         if (index >= 0 && index < userChecklist.length) {
@@ -96,7 +126,6 @@ function Checklist() {
         }
     }, [userChecklist, setUserChecklist]);
 
-
     const handleDeleteTask = useCallback(async (checklistIndex: number, taskIndex: number) => {
         if (
             checklistIndex >= 0 &&
@@ -107,16 +136,22 @@ function Checklist() {
             const checklistId = userChecklist[checklistIndex].checklistId;
             const taskId = userChecklist[checklistIndex].tasks[taskIndex].id;
 
-            const checklistItem = await mydatabase.checklists.findOne(checklistId).exec();
-            if (checklistItem) {
-                const updatedTasks = checklistItem.tasks.filter((task: any) => task._id !== taskId);
-                checklistItem.tasks = updatedTasks;
-                await checklistItem.update();
-            }
+            try {
+                const checklistItem = await mydatabase.checklists.findOne(checklistId).exec();
+                if (checklistItem) {
+                    const updatedTasks = checklistItem.get('tasks').filter((task: any) => task.id !== taskId);
 
-            const updatedChecklists = [...userChecklist];
-            updatedChecklists[checklistIndex].tasks.splice(taskIndex, 1);
-            setUserChecklist(updatedChecklists);
+                    await checklistItem.update({
+                        $set: { tasks: updatedTasks },
+                    });
+
+                    const updatedChecklists = [...userChecklist];
+                    updatedChecklists[checklistIndex].tasks = updatedTasks;
+                    setUserChecklist(updatedChecklists);
+                }
+            } catch (error) {
+                console.error('Error updating checklist item:', error);
+            }
         }
     }, [userChecklist, setUserChecklist]);
 
@@ -130,12 +165,16 @@ function Checklist() {
         if (e.key === "Enter") {
             handleCreateTask();
         }
-    }, [handleCreateTask])
+        else if (e.key === "Escape") {
+            handleCloseTaskModal();
+        }
+    }, [handleCreateTask, handleCloseTaskModal])
 
     const handleLogout = useCallback(() => {
         setUserData({ userId: '', email: '' })
         setIsLoggedIn(false)
-    }, [setIsLoggedIn, setUserData])
+        setUserChecklist([])
+    }, [setIsLoggedIn, setUserData, setUserChecklist])
 
     return (
         <div className="bg-blue-primary px-6 lg:px-36 py-6">
